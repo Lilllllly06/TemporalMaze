@@ -93,6 +93,32 @@ class OptimizedGame(OriginalGame):
         self.show_debug = False
         self.frame_times = []
         self.last_gc_time = time.time()
+        
+        # Rules screen state
+        self.rules_scroll_offset = 0
+        self.rules_lines = [
+            "OBJECTIVE:",
+            "Navigate through time-bending mazes to reach the exit portal.",
+            "",
+            "GAMEPLAY:",
+            "- Move: WASD or Arrow Keys.",
+            "- Avoid Guards: They will capture you!",
+            "- Collect Keys: To unlock doors.",
+            "- Use Terminals (E): For hints and story.",
+            "- Collect Potions: Restore time travel energy.",
+            "",
+            "TIME TRAVEL (T Key):",
+            "- Create a clone that repeats your past movements.",
+            "- Use clones to activate multiple switches.",
+            "- Costs Energy (shown top-left).",
+            "",
+            "OTHER CONTROLS:",
+            "- R: Restart level",
+            "- ESC: Pause / Unpause / Back",
+            "- H: View this help screen",
+            "- E: Interact with Switches/Terminals",
+            "- F3: Toggle Debug Info"
+        ]
     
     def run(self):
         """
@@ -436,7 +462,9 @@ class OptimizedGame(OriginalGame):
                 self.screen.blit(frame, (screen_x, screen_y))
         
         # Render clones and their paw prints
+        print(f"[Render] Clones list size: {len(self.clones)}") # DEBUG: Check if clones exist before rendering
         for clone in self.clones:
+            print(f"[Render] Rendering Clone at ({clone.x}, {clone.y}), Active: {getattr(clone, 'active', 'N/A')}, Step: {getattr(clone, 'current_step', 'N/A')}") # DEBUG
             # Render clone's paw prints if they exist
             if hasattr(clone, 'paw_prints'):
                 for paw in clone.paw_prints:
@@ -1082,3 +1110,100 @@ class OptimizedGame(OriginalGame):
     def _draw_doggy_logo(self, x, y, size):
         pygame.draw.circle(self.screen, DOGGY_BROWN, (x + size, y + size), size)
         pass 
+
+    def _handle_rules_input(self, key):
+        """Handle input on the rules screen, including scrolling."""
+        if key in [pygame.K_ESCAPE, pygame.K_BACKSPACE]:
+            self.state = STATE_MAIN_MENU
+            self.rules_scroll_offset = 0 # Reset scroll on exit
+        elif key == pygame.K_UP:
+            self.rules_scroll_offset = max(0, self.rules_scroll_offset - 1)
+        elif key == pygame.K_DOWN:
+            # Calculate max scroll based on screen height and font size
+            # Assuming font height ~25px and buffer space
+            visible_lines = (SCREEN_HEIGHT - 150) // 25 
+            max_scroll = max(0, len(self.rules_lines) - visible_lines)
+            self.rules_scroll_offset = min(max_scroll, self.rules_scroll_offset + 1)
+            
+    def _render_rules(self):
+        """Render the game rules screen with scrolling."""
+        self.screen.fill(BG_COLOR)
+        
+        # Title
+        title = self.title_font.render("GAME RULES & HELP", True, DARK_BLUE)
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 60))
+        self.screen.blit(title, title_rect)
+        
+        # Define text area
+        text_area_y = title_rect.bottom + 30
+        text_area_height = SCREEN_HEIGHT - text_area_y - 60 # Leave space for back button
+        line_height = 25 # Approximate line height
+        visible_lines_count = text_area_height // line_height
+        
+        # Determine which lines to display
+        start_index = self.rules_scroll_offset
+        end_index = min(len(self.rules_lines), start_index + visible_lines_count)
+        display_lines = self.rules_lines[start_index:end_index]
+        
+        # Render visible lines
+        y_pos = text_area_y
+        for line in display_lines:
+            if line == "":
+                y_pos += 15 
+                continue
+            
+            text_color = UI_TEXT
+            text_x = 100
+            font_to_use = self.font
+            
+            if ":" in line and line.endswith(":"):
+                text_color = UI_HIGHLIGHT
+                text_x = 80
+                font_to_use = assets.get_font("medium_bold") # Use a bold font maybe
+            
+            text = font_to_use.render(line, True, text_color)
+            self.screen.blit(text, (text_x, y_pos))
+            y_pos += line_height
+            
+        # Draw Scroll indicators if needed
+        if self.rules_scroll_offset > 0:
+            # Draw UP arrow indicator
+            pygame.draw.polygon(self.screen, UI_HIGHLIGHT, 
+                                [(SCREEN_WIDTH - 40, text_area_y + 10),
+                                 (SCREEN_WIDTH - 30, text_area_y),
+                                 (SCREEN_WIDTH - 20, text_area_y + 10)])
+                                 
+        if end_index < len(self.rules_lines):
+            # Draw DOWN arrow indicator
+            bottom_y = text_area_y + text_area_height
+            pygame.draw.polygon(self.screen, UI_HIGHLIGHT, 
+                                [(SCREEN_WIDTH - 40, bottom_y - 10),
+                                 (SCREEN_WIDTH - 30, bottom_y),
+                                 (SCREEN_WIDTH - 20, bottom_y - 10)])
+        
+        # Return to menu instruction
+        back_text = self.font.render("Press ESC to return", True, UI_HIGHLIGHT)
+        back_rect = back_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 30))
+        self.screen.blit(back_text, back_rect) 
+
+    def _handle_level_complete_input(self, key):
+        """Handle input when a level is completed (override)."""
+        if key == pygame.K_RETURN:
+            print(f"[Level Complete] Transitioning from level {self.current_level}...")
+            self.current_level += 1
+            self.level_completed = False # Reset flag
+            self.player_caught = False # Reset flag
+            
+            # Load the next level using the correct method
+            success = self.load_level(self.current_level)
+            
+            if success:
+                print(f"[Level Complete] Successfully loaded level {self.current_level}.")
+                self.state = STATE_PLAYING
+            else:
+                # If loading fails, go back to main menu instead of restarting level 1
+                print(f"[Level Complete] Failed to load level {self.current_level}. Returning to main menu.")
+                self.state = STATE_MAIN_MENU 
+                # Reset level counter? Maybe show a message? 
+                self.show_message(f"Error loading level {self.current_level}!", 3.0)
+                self.current_level = 1 # Reset for next game start 

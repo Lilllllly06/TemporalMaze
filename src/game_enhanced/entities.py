@@ -6,6 +6,7 @@ Handles player, clones, guards, and items.
 import math
 import random
 from .constants import *
+import traceback
 
 class Entity:
     """Base entity class."""
@@ -259,44 +260,53 @@ class Player(Entity):
 
     def time_travel(self, steps, game_state):
         """Creates a time clone based on past history."""
-        print(f"Attempting time travel: {steps} steps back. History length: {len(self.history)}") # Debug
+        print(f"[TIME TRAVEL START] Trying {steps} steps back. History len: {len(self.history)}. Energy: {self.energy}")
+        
         if self.energy <= 0:
-            print("Time travel failed: No energy.")
+            print("[TIME TRAVEL FAIL] No energy.")
             game_state.show_message("Not enough energy!", 2)
             return False
             
-        # Ensure steps are valid (need at least 1 step for a clone)
+        # Ensure steps are valid (need at least 1 step for a clone, and history must be long enough)
         if steps < 1 or steps >= len(self.history):
-            print(f"Time travel failed: Invalid steps ({steps}). Max valid: {len(self.history) - 1}")
             max_steps = len(self.history) - 1
+            print(f"[TIME TRAVEL FAIL] Invalid steps ({steps}). Need 1-{max_steps}. History len: {len(self.history)}")
             game_state.show_message(f"Invalid steps (need 1-{max_steps})", 2)
             return False
             
         # History slice: from beginning up to 'steps' ago
-        # The clone needs the state *before* the step it will take first
         history_slice = self.history[:-steps]
+        print(f"[TIME TRAVEL] History slice length: {len(history_slice)}")
+        
         if not history_slice:
-             print("Time travel failed: No history available for slice.")
-             game_state.show_message("Not enough history recorded!", 2)
+             print("[TIME TRAVEL FAIL] History slice is empty.")
+             game_state.show_message("Not enough history recorded for this travel!", 2)
              return False
              
-        start_state = history_slice[0] # Clone starts at the beginning of the relevant history
-        clone_history = history_slice # Give the clone its path
+        start_state = history_slice[0] 
+        clone_history = history_slice 
 
-        print(f"Creating clone at {start_state['x']}, {start_state['y']} with {len(clone_history)} history steps.")
+        print(f"[TIME TRAVEL] Creating clone at {start_state['x']},{start_state['y']} with {len(clone_history)} history steps.")
 
         # Create the clone
-        new_clone = TimeClone(start_state['x'], start_state['y'], clone_history)
+        try:
+             new_clone = TimeClone(start_state['x'], start_state['y'], clone_history)
+             print("[TIME TRAVEL] Clone instance created.")
+        except Exception as e:
+             print(f"[TIME TRAVEL FAIL] Error creating TimeClone instance: {e}")
+             traceback.print_exc()
+             game_state.show_message("Error initializing clone.", 2)
+             return False
         
         # Add clone to the game state's list
         if hasattr(game_state, 'clones') and isinstance(game_state.clones, list):
             game_state.clones.append(new_clone)
             self.energy -= 1 # Consume energy
-            print("Time clone created successfully.")
+            print(f"[TIME TRAVEL SUCCESS] Clone added. Energy left: {self.energy}. Total clones: {len(game_state.clones)}")
             return True
         else:
-            print("Time travel failed: Game state has no 'clones' list.")
-            game_state.show_message("Error creating clone object.", 2)
+            print("[TIME TRAVEL FAIL] Game state missing 'clones' list or it's not a list.")
+            game_state.show_message("Error adding clone to game.", 2)
             return False
             
     def interact(self, game_state):
@@ -336,10 +346,10 @@ class TimeClone(Entity):
         super().__init__(x, y)
         self.history = history.copy()
         self.current_step = 0
-        self.direction = DOWN if not history else history[0][2]
-        self.facing = "right"  # Default visual facing direction
+        self.direction = history[0]['direction'] if history else 'right' # Default if history is empty
+        self.facing = self.direction # Initial facing matches direction
         self.active = True
-        self.paw_prints = []  # List of paw prints for animation
+        self.paw_prints = [] 
     
     def update(self, game_state):
         """
