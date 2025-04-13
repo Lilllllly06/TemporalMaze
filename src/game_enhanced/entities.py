@@ -123,65 +123,73 @@ class Player(Entity):
         # Get tile at new position
         tile = world.get_tile_at(new_x, new_y)
         
-        # Check if the position is walkable
+        # --- Check 1: Basic Walkable Tiles --- 
         if world.is_walkable(new_x, new_y):
-            # Check interactions with special tiles
+            # Handle interactions ON the tile being moved TO
             if tile == TILE_SWITCH:
-                world.activate_switch(new_x, new_y)
+                 # If stepping ONTO a switch, activate it
+                 world.activate_switch(new_x, new_y)
             elif tile == TILE_EXIT:
-                world.level_completed = True # Signal level complete
-                # Don't move onto the exit tile, just trigger completion
-                return False # Prevent player actually moving onto exit tile
+                world.level_completed = True 
+                return False # Prevent moving onto exit, just trigger win
             elif tile == TILE_PORTAL_A or tile == TILE_PORTAL_B:
                 portal_pos = world.get_paired_portal((new_x, new_y))
                 if portal_pos:
-                    # Stepping off a switch before teleport? Check current tile.
+                    # Stepping OFF a switch before teleport?
                     if world.get_tile_at(self.x, self.y) == TILE_SWITCH:
                          world.deactivate_switch(self.x, self.y)
-                    self.x, self.y = portal_pos # Teleport
-                    self.record_position() # Record position AFTER teleport
-                    return True # Move successful (teleport)
+                    self.x, self.y = portal_pos
+                    self.record_position() # Record arrival position
+                    return True 
             elif tile == TILE_ITEM_KEY:
                 self.keys += 1
-                self.inventory.append(("key", (new_x, new_y)))
                 world.remove_item(new_x, new_y)
+                # Update inventory if needed
             elif tile == TILE_ITEM_POTION:
                 self.energy = min(self.energy_max, self.energy + 1)
-                self.inventory.append(("potion", (new_x, new_y)))
                 world.remove_item(new_x, new_y)
-            elif tile == TILE_TERMINAL:
-                message = world.activate_terminal(new_x, new_y)
-                if message and hasattr(self, 'game_ref') and self.game_ref: # Need game ref to show message
-                    self.game_ref.show_message(message, 5.0) # Show for 5 secs
-                # Allow walking onto terminal
-                pass 
-                
-            # Check if we're stepping off a switch AFTER potential interactions
-            # Use self.x, self.y (original position) for this check
+                # Update inventory if needed
+            # Terminal interaction is handled by 'E' key now
+            
+            # Stepping OFF a switch?
             if world.get_tile_at(self.x, self.y) == TILE_SWITCH:
                  world.deactivate_switch(self.x, self.y)
                  
-            # Update position if not handled by special tile (like portal)
+            # Complete the move
             self.x = new_x
             self.y = new_y
             return True
             
-        # Special case: door requires a key
-        elif tile == TILE_DOOR_CLOSED and self.keys > 0:
-            # Record position BEFORE moving through door
-            # self.record_position() # Already recorded at start of move
-            self.keys -= 1
-            world.open_door(new_x, new_y) # Use world method to open
-            # Step off switch? Check current tile.
-            if world.get_tile_at(self.x, self.y) == TILE_SWITCH:
-                 world.deactivate_switch(self.x, self.y)
-            self.x = new_x # Move onto the now-open door tile
-            self.y = new_y
-            return True
-            
-        # If move failed, don't modify history here.
-        # record_position already handles not adding duplicates.
+        # --- Check 2: Locked Door Interaction --- 
+        # Check if the target tile is a door (could be open or closed)
+        # Use get_tile_at for safety, even though is_walkable failed
+        target_tile_type = world.get_tile_at(new_x, new_y)
+        if target_tile_type == TILE_DOOR_CLOSED:
+             # Check if this specific door requires a key (using its position)
+             # We need a way to know which doors are key-locked vs switch-locked.
+             # For now, assume door at tutorial position (8, 1) is the key door.
+             # A better approach would be to store door type in world.doors
+             is_key_door = (new_x, new_y) == (8, 1) # Updated from (10, 1) to match new level1.txt
              
+             if is_key_door and self.keys > 0:
+                  print("Opening locked door with key!")
+                  self.keys -= 1
+                  world.open_door(new_x, new_y) # This sets door state and tile type
+                  # Stepping off switch?
+                  if world.get_tile_at(self.x, self.y) == TILE_SWITCH:
+                       world.deactivate_switch(self.x, self.y)
+                  # Complete the move onto the (now open) door tile
+                  self.x = new_x
+                  self.y = new_y
+                  return True
+             else:
+                  # It's a closed door we can't open (no key or switch door)
+                  print(f"Move blocked by closed door at ({new_x}, {new_y}). Key needed: {is_key_door}, Keys held: {self.keys}")
+                  return False
+
+        # --- Move Failed --- 
+        # If not walkable and not an openable locked door
+        print(f"Move to ({new_x}, {new_y}) failed. Tile: {target_tile_type}")
         return False
     
     def record_position(self):

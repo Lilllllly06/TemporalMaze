@@ -389,101 +389,94 @@ class LevelGenerator:
             "terminal_pos": None
         }
 
-# Helper function to load a level from file
+TILE_MAPPING = {
+    '#': TILE_WALL,
+    '.': TILE_FLOOR,
+    'P': TILE_FLOOR, # Player start is floor
+    'E': TILE_EXIT,
+    'S': TILE_SWITCH,
+    'T': TILE_SWITCH, # Use T for time-travel switches
+    'D': TILE_DOOR_CLOSED,
+    'L': TILE_DOOR_CLOSED, # Locked door
+    'C': TILE_DOOR_CLOSED, # Clone door
+    'A': TILE_PORTAL_A,
+    'B': TILE_PORTAL_B,
+    'K': TILE_ITEM_KEY,
+    'O': TILE_ITEM_POTION, # Use O for potion (P is player)
+    'X': TILE_TERMINAL,
+    'G': TILE_FLOOR # Guard start is floor
+}
+
 def load_level_from_file(file_path):
-    """
-    Load a level from a text file.
-    
+    """Loads level data from a text file.
+
     Args:
-        file_path (str): Path to the level file
-        
+        file_path (str): Path to the level file.
+
     Returns:
-        tuple: (level_map, player_start, switches, doors, portals, guards, items, terminal_pos)
+        tuple: (map_array, player_start, switches, doors, portals, guards, items, terminal_pos) 
+               or None if loading fails.
     """
     try:
         with open(file_path, 'r') as f:
-            lines = f.readlines()
+            lines = [line.strip() for line in f if line.strip()]
         
-        # Calculate dimensions
+        if not lines:
+            print(f"Error: Level file {file_path} is empty.")
+            return None
+            
         height = len(lines)
-        width = max(len(line.strip()) for line in lines)
+        width = len(lines[0])
         
-        # Initialize empty arrays
-        level_map = np.full((height, width), TILE_WALL, dtype=int)
+        level_map = np.full((height, width), TILE_FLOOR, dtype=int)
+        player_start = None
         switches = []
         doors = []
-        portals_a = []
-        portals_b = []
+        portals = {}
+        portal_list = [] # Store pairs
         guards = []
         items = []
-        player_start = None
         terminal_pos = None
-        
-        # Parse the level file
+
         for y, line in enumerate(lines):
-            for x, char in enumerate(line.strip()):
-                if char == '#':
-                    level_map[y][x] = TILE_WALL
-                elif char == '.':
-                    level_map[y][x] = TILE_FLOOR
-                elif char == 'S':
-                    level_map[y][x] = TILE_SWITCH
-                    switches.append((x, y))
-                elif char == 'D':
-                    level_map[y][x] = TILE_DOOR_CLOSED
-                    doors.append((x, y))
-                elif char == 'E':
-                    level_map[y][x] = TILE_EXIT
-                elif char == '@':
-                    level_map[y][x] = TILE_FLOOR
-                    player_start = (x, y)
-                elif char == 'A':
-                    level_map[y][x] = TILE_PORTAL_A
-                    portals_a.append((x, y))
-                elif char == 'B':
-                    level_map[y][x] = TILE_PORTAL_B
-                    portals_b.append((x, y))
-                elif char == 'G':
-                    level_map[y][x] = TILE_FLOOR
-                    guards.append((x, y))
-                elif char == 'K':
-                    level_map[y][x] = TILE_ITEM_KEY
-                    items.append(((x, y), TILE_ITEM_KEY))
-                elif char == 'P':
-                    level_map[y][x] = TILE_ITEM_POTION
-                    items.append(((x, y), TILE_ITEM_POTION))
-                elif char == 'T':
-                    level_map[y][x] = TILE_TERMINAL
-                    terminal_pos = (x, y)
-        
+            if len(line) != width:
+                 print(f"Error: Inconsistent line width in {file_path} at line {y+1}.")
+                 return None
+            for x, char in enumerate(line):
+                pos = (x, y)
+                tile_type = TILE_MAPPING.get(char, TILE_FLOOR) # Default to floor
+                level_map[y][x] = tile_type
+                
+                if char == 'P': player_start = pos
+                elif char == 'S' or char == 'T': switches.append(pos)
+                elif char == 'D' or char == 'L' or char == 'C': doors.append(pos)
+                elif char == 'A': portals['A'] = pos
+                elif char == 'B': portals['B'] = pos
+                elif char == 'K': items.append((pos, TILE_ITEM_KEY))
+                elif char == 'O': items.append((pos, TILE_ITEM_POTION))
+                elif char == 'X': terminal_pos = pos
+                elif char == 'G': guards.append(pos)
+
+        if not player_start:
+            print(f"Warning: No player start 'P' found in {file_path}. Placing at (1,1).")
+            player_start = (1, 1)
+            level_map[1][1] = TILE_FLOOR # Ensure start is walkable
+            
         # Pair up portals
-        portals = list(zip(portals_a, portals_b)) if len(portals_a) == len(portals_b) else []
-        
-        # If no player start position found, set a default
-        if player_start is None:
-            for y in range(height):
-                for x in range(width):
-                    if level_map[y][x] == TILE_FLOOR:
-                        player_start = (x, y)
-                        break
-                if player_start:
-                    break
-        
-        return {
-            "width": width,
-            "height": height,
-            "map": level_map,
-            "player_start": player_start,
-            "exit_pos": (12, 12),
-            "switches": switches,
-            "doors": {door: {"required_switches": set(), "is_open": False} for door in doors},
-            "portals": portals,
-            "guards": guards,
-            "items": items,
-            "terminal_pos": terminal_pos
-        }
-        
+        if 'A' in portals and 'B' in portals:
+            portal_list.append((portals['A'], portals['B']))
+        elif 'A' in portals or 'B' in portals:
+             print(f"Warning: Unpaired portal found in {file_path}. Portals disabled.")
+
+        # Important: Return doors as a list of positions, not the dict needed by World
+        # The conversion happens in OptimizedGame._convert_file_data_to_dict
+        return (level_map, player_start, switches, doors, portal_list, guards, items, terminal_pos)
+
+    except FileNotFoundError:
+        print(f"Error: Level file not found: {file_path}")
+        return None
     except Exception as e:
-        print(f"Error loading level: {e}")
-        # Return a simple default level
-        return LevelGenerator(20, 20)._generate_simple_level() 
+        print(f"Error reading level file {file_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None 
