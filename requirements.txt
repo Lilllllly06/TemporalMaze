@@ -1,0 +1,9 @@
+# Temporal Maze requirements
+# Python 3.6+ is required
+pygame>=2.0.1
+numpy>=1.19.0
+
+# External dependencies required for Temporal Maze game
+
+# Standard library dependencies
+# No external dependencies required! 
