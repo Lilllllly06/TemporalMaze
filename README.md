@@ -4,9 +4,9 @@ A puzzle game where you solve mazes by creating time clones of yourself.
 
 ## Gameplay Demo
 
-[![Watch the Temporal Maze gameplay demo](assets/temporal-maze-demo.png)](assets/temporal-maze-demo.mp4)
+[![Temporal Maze Gameplay Demo](assets/temporal-maze-demo.gif)](https://lilllllly06.github.io/TemporalMaze/demo.html)
 
-Click the preview to watch the gameplay demo, or [open the video directly](assets/temporal-maze-demo.mp4).
+> Click the preview above to watch the full gameplay demo.
 
 ## Game Concept
 
