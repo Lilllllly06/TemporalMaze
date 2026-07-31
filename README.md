@@ -2,6 +2,12 @@
 
 A puzzle game where you solve mazes by creating time clones of yourself.
 
+## Gameplay Demo
+
+[![Watch the Temporal Maze gameplay demo](assets/temporal-maze-demo.png)](assets/temporal-maze-demo.mp4)
+
+Click the preview to watch the gameplay demo, or [open the video directly](assets/temporal-maze-demo.mp4).
+
 ## Game Concept
 
 In Temporal Maze, you navigate through puzzles by strategically placing switches, opening doors, and most importantly, using the ability to create "time clones" of yourself.
